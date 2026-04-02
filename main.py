@@ -156,22 +156,40 @@ def main():
             continue
 
         for news in news_to_process:
+            print(f"DEBUG: Checking duplicate for: {news['original_title']}")
             with open(POSTED_NEWS_FILE, "r", encoding="utf-8") as f:
-                if news['original_title'] in f.read().splitlines(): continue
+                if news['original_title'] in f.read().splitlines(): 
+                    print(f"DEBUG: Already posted, skipping.")
+                    continue
 
-            print(f"New Topic: {news['original_title']}")
+            print(f"DEBUG: Processing New Topic: {news['original_title']}")
             api_key = get_current_key()
+            
+            print("DEBUG: Generating Headline...")
             headline = generate_unique_headline(news['original_title'], api_key)
+            print(f"DEBUG: AI Headline: {headline}")
+
+            print("DEBUG: Searching for Image...")
             image_url = get_web_search_image(headline, api_key)
+            print(f"DEBUG: Image URL found: {image_url}")
+
+            print("DEBUG: Generating Article Body...")
             article = generate_ai_content(headline, image_url, api_key)
             
-            if article and post_to_blogger(service, headline, article):
-                with open(POSTED_NEWS_FILE, "a", encoding="utf-8") as f:
-                    f.write(news['original_title'] + "\n")
-                print("Posted! Wait 6 mins...")
-                if IS_GITHUB_ACTIONS: return # Finish after 1 post in GitHub Actions
-                countdown(360)
+            if article:
+                print("DEBUG: Attempting to post to Blogger...")
+                if post_to_blogger(service, headline, article):
+                    with open(POSTED_NEWS_FILE, "a", encoding="utf-8") as f:
+                        f.write(news['original_title'] + "\n")
+                    print("DEBUG: SUCCESSFULLY POSTED!")
+                    if IS_GITHUB_ACTIONS: 
+                        print("DEBUG: GitHub Action single-run limit reached. Exiting.")
+                        return
+                    countdown(360)
+                else:
+                    print("DEBUG: Blogger Post Failed.")
             else:
+                print("DEBUG: Article Generation Failed (AI empty).")
                 time.sleep(60)
         
         if IS_GITHUB_ACTIONS: break
