@@ -10,6 +10,9 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
+  GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
+  BLOG_ID: ${{ secrets.BLOG_ID }}
 
 jobs:
   build:
@@ -36,10 +39,6 @@ jobs:
         echo "${{ secrets.TOKEN_PICKLE_BASE64 }}" | base64 -d > token.pickle
 
     - name: Run News Bot
-      env:
-        GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
-        GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
-        BLOG_ID: ${{ secrets.BLOG_ID }}
       run: python main.py
 
     - name: Save Progress
