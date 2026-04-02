@@ -157,10 +157,14 @@ def main():
 
         for news in news_to_process:
             print(f"DEBUG: Checking duplicate for: {news['original_title']}")
-            with open(POSTED_NEWS_FILE, "r", encoding="utf-8") as f:
-                if news['original_title'] in f.read().splitlines(): 
-                    print(f"DEBUG: Already posted, skipping.")
-                    continue
+            if os.path.exists(POSTED_NEWS_FILE):
+                with open(POSTED_NEWS_FILE, "r", encoding="utf-8") as f:
+                    if news['original_title'] in f.read().splitlines(): 
+                        print(f"DEBUG: Already posted, skipping.")
+                        continue
+            else:
+                # Create the file if it doesn't exist
+                open(POSTED_NEWS_FILE, "w").close()
 
             print(f"DEBUG: Processing New Topic: {news['original_title']}")
             api_key = get_current_key()
