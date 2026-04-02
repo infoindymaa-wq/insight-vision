@@ -137,7 +137,7 @@ def main():
     while True:
         feed = feedparser.parse(RSS_FEED_URL)
         now = datetime.now(timezone.utc)
-        four_hours_ago = now - timedelta(hours=4)
+        four_hours_ago = now - timedelta(hours=24) # Increased to 24 hours for testing
 
         posted_titles = []
         if os.path.exists(POSTED_NEWS_FILE):
