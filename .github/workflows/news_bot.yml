@@ -2,18 +2,23 @@ name: 24/7 AI News Blogger
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # Runs every 15 minutes (GitHub's stable limit)
+    - cron: '*/15 * * * *' 
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: true
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
 
@@ -38,6 +43,6 @@ jobs:
       run: |
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
-        git add posted_news.txt last_key_index.txt
-        git commit -m "Sync posted news and API index" || echo "No changes"
-        git push
+        git add posted_news.txt last_key_index.txt || echo "No files to add"
+        git commit -m "Sync progress [skip ci]" || echo "No changes to commit"
+        git push origin main
