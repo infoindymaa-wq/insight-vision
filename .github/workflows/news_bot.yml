@@ -1,0 +1,43 @@
+name: 24/7 AI News Blogger
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Runs every 15 minutes (GitHub's stable limit)
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Restore Session
+      run: |
+        echo "${{ secrets.CLIENT_SECRETS_JSON }}" > client_secrets.json
+        echo "${{ secrets.TOKEN_PICKLE_BASE64 }}" | base64 -d > token.pickle
+
+    - name: Run News Bot
+      env:
+        GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
+        GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
+        BLOG_ID: ${{ secrets.BLOG_ID }}
+      run: python main.py
+
+    - name: Save Progress
+      run: |
+        git config --global user.name 'github-actions'
+        git config --global user.email 'github-actions@github.com'
+        git add posted_news.txt last_key_index.txt
+        git commit -m "Sync posted news and API index" || echo "No changes"
+        git push

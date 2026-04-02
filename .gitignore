@@ -1,0 +1,7 @@
+.env
+client_secrets.json
+token.pickle
+last_key_index.txt
+posted_news.txt
+__pycache__/
+*.pickle
