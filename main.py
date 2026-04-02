@@ -14,20 +14,27 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
 
-# Load environment variables
+# Try loading .env (only for local)
 load_dotenv()
 
-# Configuration
-API_KEYS = [os.getenv("GROQ_API_KEY_1"), os.getenv("GROQ_API_KEY_2")]
-BLOGGER_BLOG_ID = os.getenv("BLOG_ID") 
+# Configuration - CHECKING BOTH SYSTEM AND ENV
+BLOGGER_BLOG_ID = os.environ.get("BLOG_ID") or os.getenv("BLOG_ID")
+API_KEY_1 = os.environ.get("GROQ_API_KEY_1") or os.getenv("GROQ_API_KEY_1")
+API_KEY_2 = os.environ.get("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_2")
+
+API_KEYS = [API_KEY_1, API_KEY_2]
 RSS_FEED_URL = "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
 POSTED_NEWS_FILE = "posted_news.txt"
 KEY_INDEX_FILE = "last_key_index.txt"
-IS_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 
-print(f"DEBUG: GITHUB_ACTIONS={IS_GITHUB_ACTIONS}")
-print(f"DEBUG: BLOG_ID={'Set' if BLOGGER_BLOG_ID else 'NOT SET'}")
-print(f"DEBUG: GROQ_KEY_1={'Set' if API_KEYS[0] else 'NOT SET'}")
+print("--- ENVIRONMENT DIAGNOSTIC ---")
+print(f"IS_GITHUB_ACTIONS: {IS_GITHUB_ACTIONS}")
+print(f"BLOG_ID Status: {'FOUND' if BLOGGER_BLOG_ID else 'NOT FOUND'}")
+print(f"GROQ_KEY_1 Status: {'FOUND' if API_KEY_1 else 'NOT FOUND'}")
+print(f"GROQ_KEY_2 Status: {'FOUND' if API_KEY_2 else 'NOT FOUND'}")
+print(f"Available Env Vars: {[k for k in os.environ.keys() if 'GROQ' in k or 'BLOG' in k]}")
+print("------------------------------")
 
 def get_current_key():
     index = 0
@@ -35,8 +42,13 @@ def get_current_key():
         with open(KEY_INDEX_FILE, "r") as f:
             try: index = int(f.read().strip())
             except: index = 0
-    current_key = API_KEYS[index]
-    next_index = (index + 1) % len(API_KEYS)
+    
+    # Filter out None keys
+    valid_keys = [k for k in API_KEYS if k]
+    if not valid_keys: return None
+    
+    current_key = valid_keys[index % len(valid_keys)]
+    next_index = (index + 1) % len(valid_keys)
     with open(KEY_INDEX_FILE, "w") as f:
         f.write(str(next_index))
     return current_key
@@ -51,17 +63,15 @@ def get_blogger_service():
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             print("DEBUG: Refreshing token...")
-            creds.refresh(Request())
-        else:
-            if IS_GITHUB_ACTIONS:
-                print("ERROR: Authentication required but cannot run browser in GitHub Actions.")
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                print(f"ERROR: Token refresh failed: {e}")
                 sys.exit(1)
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'client_secrets.json', ['https://www.googleapis.com/auth/blogger'])
-            creds = flow.run_local_server(port=0)
-        
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+        else:
+            print("ERROR: No valid token and cannot login in GitHub.")
+            sys.exit(1)
+            
     return build('blogger', 'v3', credentials=creds)
 
 def is_valid_news_image(url):
@@ -140,57 +150,38 @@ def post_to_blogger(service, title, content):
 
 def main():
     print("--- STARTING BOT ---")
-    if not BLOGGER_BLOG_ID or not API_KEYS[0]:
-        print("CRITICAL ERROR: Missing credentials in Environment Variables.")
+    if not BLOGGER_BLOG_ID or not API_KEY_1:
+        print("CRITICAL ERROR: Credentials missing after all checks.")
         sys.exit(1)
 
     service = get_blogger_service()
-    
     feed = feedparser.parse(RSS_FEED_URL)
-    print(f"DEBUG: Found {len(feed.entries)} entries in RSS feed.")
     
     if not feed.entries:
-        print("ERROR: RSS Feed is empty. Check URL.")
+        print("ERROR: RSS Feed is empty.")
         sys.exit(1)
 
-    news_to_process = feed.entries[:5] # Take top 5 for testing
-    print(f"DEBUG: Attempting to process {len(news_to_process)} news items (FORCE MODE).")
+    news_to_process = feed.entries[:5] 
 
     for news in news_to_process:
         print(f"\n--- Processing: {news.title} ---")
         api_key = get_current_key()
         
-        # 1. Headline
         headline = generate_unique_headline(news.title, api_key)
-        print(f"DEBUG: Headline: {headline}")
-
-        # 2. Image
         image_url = get_web_search_image(headline, api_key)
-        print(f"DEBUG: Image: {image_url}")
-
-        # 3. Content
         article = generate_ai_content(headline, image_url, api_key)
-        if not article:
-            print("ERROR: Article generation failed.")
-            continue
-
-        # 4. Post
-        if post_to_blogger(service, headline, article):
-            # Record success only if it really happened
+        
+        if article and post_to_blogger(service, headline, article):
             if os.path.exists(POSTED_NEWS_FILE):
                 with open(POSTED_NEWS_FILE, "a", encoding="utf-8") as f:
                     f.write(news.title + "\n")
             
             if IS_GITHUB_ACTIONS:
-                print("DEBUG: Single post completed for GitHub. Exiting normally.")
+                print("DEBUG: Single post completed. Exiting.")
                 sys.exit(0)
             
             print("DEBUG: Waiting 6 minutes...")
             time.sleep(360)
-        else:
-            print("ERROR: Failed to post this article.")
-
-    print("--- FINISHED ---")
 
 if __name__ == "__main__":
     main()
