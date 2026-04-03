@@ -18,11 +18,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration - CHECKING BOTH SYSTEM AND ENV
-BLOGGER_BLOG_ID = os.environ.get("BLOG_ID") or os.getenv("BLOG_ID")
-API_KEY_1 = os.environ.get("GROQ_API_KEY_1") or os.getenv("GROQ_API_KEY_1")
-API_KEY_2 = os.environ.get("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_2")
+BLOG_ID = os.environ.get("BLOG_ID") or os.getenv("BLOG_ID")
+GROQ_API_KEY_1 = os.environ.get("GROQ_API_KEY_1") or os.getenv("GROQ_API_KEY_1")
+GROQ_API_KEY_2 = os.environ.get("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_2")
 
-API_KEYS = [API_KEY_1, API_KEY_2]
+API_KEYS = [GROQ_API_KEY_1, GROQ_API_KEY_2]
 RSS_FEED_URL = "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
 POSTED_NEWS_FILE = "posted_news.txt"
 KEY_INDEX_FILE = "last_key_index.txt"
@@ -30,9 +30,9 @@ IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 
 print("--- ENVIRONMENT DIAGNOSTIC ---")
 print(f"IS_GITHUB_ACTIONS: {IS_GITHUB_ACTIONS}")
-print(f"BLOG_ID Status: {'FOUND' if BLOGGER_BLOG_ID else 'NOT FOUND'}")
-print(f"GROQ_KEY_1 Status: {'FOUND' if API_KEY_1 else 'NOT FOUND'}")
-print(f"GROQ_KEY_2 Status: {'FOUND' if API_KEY_2 else 'NOT FOUND'}")
+print(f"BLOG_ID Status: {'FOUND' if (BLOG_ID and len(BLOG_ID) > 2) else 'NOT FOUND OR EMPTY'}")
+print(f"GROQ_API_KEY_1 Status: {'FOUND' if (GROQ_API_KEY_1 and len(GROQ_API_KEY_1) > 2) else 'NOT FOUND OR EMPTY'}")
+print(f"GROQ_API_KEY_2 Status: {'FOUND' if (GROQ_API_KEY_2 and len(GROQ_API_KEY_2) > 2) else 'NOT FOUND OR EMPTY'}")
 print(f"Available Env Vars: {[k for k in os.environ.keys() if 'GROQ' in k or 'BLOG' in k]}")
 print("------------------------------")
 
@@ -43,8 +43,8 @@ def get_current_key():
             try: index = int(f.read().strip())
             except: index = 0
     
-    # Filter out None keys
-    valid_keys = [k for k in API_KEYS if k]
+    # Filter out empty keys
+    valid_keys = [k for k in API_KEYS if k and len(k) > 5]
     if not valid_keys: return None
     
     current_key = valid_keys[index % len(valid_keys)]
@@ -69,7 +69,7 @@ def get_blogger_service():
                 print(f"ERROR: Token refresh failed: {e}")
                 sys.exit(1)
         else:
-            print("ERROR: No valid token and cannot login in GitHub.")
+            print("ERROR: No valid token file found or token is expired without refresh capability.")
             sys.exit(1)
             
     return build('blogger', 'v3', credentials=creds)
@@ -141,7 +141,7 @@ def generate_ai_content(headline, image_url, api_key):
 def post_to_blogger(service, title, content):
     body = {"kind": "blogger#post", "title": title, "content": content}
     try:
-        response = service.posts().insert(blogId=BLOGGER_BLOG_ID, body=body).execute()
+        response = service.posts().insert(blogId=BLOG_ID, body=body).execute()
         print(f"SUCCESS: Post successful! URL: {response.get('url')}")
         return True
     except Exception as e:
@@ -150,8 +150,12 @@ def post_to_blogger(service, title, content):
 
 def main():
     print("--- STARTING BOT ---")
-    if not BLOGGER_BLOG_ID or not API_KEY_1:
-        print("CRITICAL ERROR: Credentials missing after all checks.")
+    if not BLOG_ID or len(BLOG_ID) < 5:
+        print("CRITICAL ERROR: BLOG_ID is missing or empty.")
+        sys.exit(1)
+    
+    if not GROQ_API_KEY_1 or len(GROQ_API_KEY_1) < 5:
+        print("CRITICAL ERROR: GROQ_API_KEY_1 is missing or empty.")
         sys.exit(1)
 
     service = get_blogger_service()
