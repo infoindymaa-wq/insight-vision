@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,17 +32,17 @@ jobs:
 
     - name: Restore Session
       run: |
-        echo "${{ secrets.CLIENT_SECRETS_JSON || vars.CLIENT_SECRETS_JSON }}" > client_secrets.json
+        cat << 'EOF' > client_secrets.json
+        ${{ secrets.CLIENT_SECRETS_JSON || vars.CLIENT_SECRETS_JSON }}
+        EOF
         echo "${{ secrets.TOKEN_PICKLE_BASE64 || vars.TOKEN_PICKLE_BASE64 }}" | base64 -d > token.pickle
 
     - name: Run News Bot
       env:
-        # Try secrets first, then variables as backup
         GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 || vars.GROQ_API_KEY_1 }}
         GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 || vars.GROQ_API_KEY_2 }}
         BLOG_ID: ${{ secrets.BLOG_ID || vars.BLOG_ID }}
       run: |
-        # Delete local .env if it exists to prevent overwriting
         rm -f .env
         python main.py
 
