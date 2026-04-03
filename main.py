@@ -35,8 +35,8 @@ FEEDS = {
     "WORLD": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
 }
 
-# New balanced rotation for 70 posts/day
-CAT_ORDER = ["INDIA", "WORLD", "TECH", "BUSINESS", "WORLD", "ECONOMY", "WORLD", "SCIENCE", "WORLD", "EDUCATION"]
+# New balanced rotation for 70 posts/day (WORLD is 30% = 3 out of 10)
+CAT_ORDER = ["WORLD", "INDIA", "TECH", "WORLD", "BUSINESS", "ECONOMY", "WORLD", "SCIENCE", "EDUCATION", "INDIA"]
 
 def get_rotation_category():
     count = 0
