@@ -2,7 +2,7 @@ name: 24/7 AI News Blogger
 
 on:
   schedule:
-    - cron: '*/15 * * * *' 
+    - cron: '*/6 * * * *' # Every 6 minutes (GitHub might delay this slightly)
   workflow_dispatch:
 
 permissions:
@@ -42,14 +42,12 @@ jobs:
         GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 || vars.GROQ_API_KEY_1 }}
         GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 || vars.GROQ_API_KEY_2 }}
         BLOG_ID: ${{ secrets.BLOG_ID || vars.BLOG_ID }}
-      run: |
-        rm -f .env
-        python main.py
+      run: python main.py
 
     - name: Save Progress
       run: |
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
-        git add posted_news.txt last_key_index.txt || echo "No files"
+        git add posted_news.txt last_key_index.txt || echo "No changes"
         git commit -m "Sync progress [skip ci]" || echo "No changes"
         git push origin main
