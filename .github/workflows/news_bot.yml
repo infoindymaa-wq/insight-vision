@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,20 +29,24 @@ jobs:
 
     - name: Restore Session
       run: |
-        echo "${{ secrets.CLIENT_SECRETS_JSON }}" > client_secrets.json
-        echo "${{ secrets.TOKEN_PICKLE_BASE64 }}" | base64 -d > token.pickle
+        echo "${{ secrets.CLIENT_SECRETS_JSON || vars.CLIENT_SECRETS_JSON }}" > client_secrets.json
+        echo "${{ secrets.TOKEN_PICKLE_BASE64 || vars.TOKEN_PICKLE_BASE64 }}" | base64 -d > token.pickle
 
     - name: Run News Bot
       env:
-        GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
-        GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
-        BLOG_ID: ${{ secrets.BLOG_ID }}
-      run: python main.py
+        # Try secrets first, then variables as backup
+        GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 || vars.GROQ_API_KEY_1 }}
+        GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 || vars.GROQ_API_KEY_2 }}
+        BLOG_ID: ${{ secrets.BLOG_ID || vars.BLOG_ID }}
+      run: |
+        # Delete local .env if it exists to prevent overwriting
+        rm -f .env
+        python main.py
 
     - name: Save Progress
       run: |
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
-        git add posted_news.txt last_key_index.txt || echo "No files to add"
-        git commit -m "Sync progress [skip ci]" || echo "No changes to commit"
+        git add posted_news.txt last_key_index.txt || echo "No files"
+        git commit -m "Sync progress [skip ci]" || echo "No changes"
         git push origin main
