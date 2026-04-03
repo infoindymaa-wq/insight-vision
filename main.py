@@ -177,9 +177,18 @@ def main():
     article_body = generate_ai_article(unique_headline, image_url, category, api_key)
     
     if article_body and post_to_blogger(service, unique_headline, article_body):
-        with open(POSTED_NEWS_FILE, "a", encoding="utf-8") as f:
-            f.write(news_to_post.title + "\n")
-        print(f"SUCCESS: Posted {category} news: {unique_headline}")
+        # DOUBLE CHECK: Re-read posted list right before writing to avoid race conditions
+        fresh_posted_titles = []
+        if os.path.exists(POSTED_NEWS_FILE):
+            with open(POSTED_NEWS_FILE, "r", encoding="utf-8") as f:
+                fresh_posted_titles = f.read().splitlines()
+        
+        if news_to_post.title not in fresh_posted_titles:
+            with open(POSTED_NEWS_FILE, "a", encoding="utf-8") as f:
+                f.write(news_to_post.title + "\n")
+            print(f"SUCCESS: Posted {category} news: {unique_headline}")
+        else:
+            print("DEBUG: Conflict detected! This news was posted by another run just now. Skipping record.")
 
 if __name__ == "__main__":
     main()
