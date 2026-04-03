@@ -50,6 +50,8 @@ jobs:
       run: |
         git config --global user.name 'github-actions'
         git config --global user.email 'github-actions@github.com'
-        git add posted_news.txt last_key_index.txt category_counter.txt || echo "No changes"
-        git commit -m "Sync news state [skip ci]" || echo "No changes"
+        git add posted_news.txt last_key_index.txt category_counter.txt || echo "No files"
+        git commit -m "Sync progress [skip ci]" || echo "No changes"
+        git pull --rebase origin main
         git push origin main
+
