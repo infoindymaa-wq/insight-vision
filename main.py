@@ -6,6 +6,7 @@ import requests
 import random
 import json
 import sys
+import re
 from bs4 import BeautifulSoup
 from groq import Groq
 from datetime import datetime, timedelta, timezone
@@ -24,7 +25,6 @@ KEY_INDEX_FILE = "last_key_index.txt"
 CAT_INDEX_FILE = "category_counter.txt" 
 IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 
-# EXTENDED RSS FEEDS
 FEEDS = {
     "INDIA": "https://news.google.com/rss/search?q=when:24h+location:india&hl=en-IN&gl=IN&ceid=IN:en",
     "TECH": "https://news.google.com/rss/topics/CAAqKggKIiRDQkFTRlFvSUwyMHZNRGRqTVhZU0JXVnVMVWRDR2dKSlRpZ0FQAQ?hl=en-IN&gl=IN&ceid=IN:en",
@@ -35,7 +35,6 @@ FEEDS = {
     "WORLD": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
 }
 
-# New balanced rotation for 70 posts/day (WORLD is 30% = 3 out of 10)
 CAT_ORDER = ["WORLD", "INDIA", "TECH", "WORLD", "BUSINESS", "ECONOMY", "WORLD", "SCIENCE", "EDUCATION", "INDIA"]
 
 def get_rotation_category():
@@ -44,13 +43,9 @@ def get_rotation_category():
         with open(CAT_INDEX_FILE, "r") as f:
             try: count = int(f.read().strip())
             except: count = 0
-    
-    # Simple cycle through the CAT_ORDER list
     category = CAT_ORDER[count % len(CAT_ORDER)]
-    
-    next_count = (count + 1) % 70
     with open(CAT_INDEX_FILE, "w") as f:
-        f.write(str(next_count))
+        f.write(str((count + 1) % 70))
     return category
 
 def get_current_key():
@@ -96,42 +91,54 @@ def get_web_search_image(headline, api_key):
 
 def generate_ai_article(headline, image_url, category, api_key):
     client = Groq(api_key=api_key)
-    image_html = f'<div style="text-align:center;"><img src="{image_url}" style="max-width:100%; border-radius:8px; margin-bottom:20px;"></div>' if image_url else ""
+    
+    # Advanced Image HTML with Alt Text
+    alt_text = f"{headline} - Latest News Update"
+    image_html = f'<div style="text-align:center;"><img src="{image_url}" alt="{alt_text}" title="{alt_text}" style="max-width:100%; border-radius:12px; margin-bottom:25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"></div>' if image_url else ""
     
     prompt = f"""
     Headline: {headline}
     Category: {category}
-    Task: Write a professional, journalistic news report. 
-    Tone: Objective, neutral, and authoritative. Avoid "In this article," "Welcome to," or "Let's dive in." Start directly with the lead.
+    Task: Write an SEO-optimized professional news report in English.
+    
+    Structure Requirements:
+    1. Start with a "Search Description:" line (exactly 150 chars summary with keywords).
+    2. Start the news report directly.
+    3. Use <h2> and <h3> tags for sub-sections. Use "Title: [Section Name]" inside <h2>.
+    4. Include an "Internal Link Suggestion" section at the end.
+    
     Guidelines:
-    - Use "Title:" instead of HTML headers (<h2>, <h3>). 
-    - Paragraphs should be short and factual.
-    - Write like a senior reporter for Reuters or AP.
-    - No flowery language or AI clichés (like "ever-evolving," "fast-paced," "testament").
-    - Length: 700-900 words.
-    - Format: Use <p>, <b>, <ul>, <li> tags only. No <h2> tags.
-    Final Line: Labels: {category}, Global News, Trending
+    - Neutral, journalistic tone (Reuters style).
+    - No AI-generated phrases or flowery intros.
+    - Length: 800 words.
+    - Final Line must be: Labels: {category}, News, Trending
     """
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "You are a senior news correspondent with 20 years of experience. You write crisp, factual, and direct news reports without fluff."},
+                {"role": "system", "content": "You are an SEO expert and senior news editor. You write high-ranking, factual news reports."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.6, # Lower temperature for more factual tone
+            temperature=0.6,
             max_tokens=3500
         )
-        return image_html + completion.choices[0].message.content
+        content = completion.choices[0].message.content
+        
+        # Internal linking addition
+        internal_link = f'<p><br><b>Read more trending stories on our <a href="/">homepage</a>.</b></p>'
+        
+        return image_html + content + internal_link
     except: return None
 
 def post_to_blogger(service, title, content):
-    labels = ["Breaking News"]
+    labels = ["News"]
     if "Labels:" in content:
         labels_part = content.split("Labels:")[-1].strip().split(",")
         labels = [l.strip() for l in labels_part]
         content = content.split("Labels:")[0].strip()
 
+    # Clean up the Search Description from the body if possible (Blogger theme will handle it)
     body = {"kind": "blogger#post", "title": title, "content": content, "labels": labels}
     try:
         service.posts().insert(blogId=BLOG_ID, body=body).execute()
@@ -141,8 +148,6 @@ def post_to_blogger(service, title, content):
 def main():
     service = get_blogger_service()
     category = get_rotation_category()
-    print(f"DEBUG: Processing Category: {category}")
-    
     feed = feedparser.parse(FEEDS[category])
     
     posted_titles = []
@@ -157,7 +162,6 @@ def main():
             break
 
     if not news_to_post:
-        print("DEBUG: All news in this category already posted. Falling back to WORLD.")
         feed = feedparser.parse(FEEDS["WORLD"])
         for entry in feed.entries:
             if entry.title not in posted_titles:
@@ -168,8 +172,7 @@ def main():
 
     api_key = get_current_key()
     client = Groq(api_key=api_key)
-    # Generate News-like Title
-    head_prompt = f"Convert this news item into a professional, serious journalistic headline: {news_to_post.title}. Avoid clickbait. English only."
+    head_prompt = f"Convert this into a professional, SEO-rich journalistic headline: {news_to_post.title}. Return only the title."
     head_res = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": head_prompt}], max_tokens=50)
     unique_headline = head_res.choices[0].message.content.strip().strip('"')
 
@@ -177,18 +180,16 @@ def main():
     article_body = generate_ai_article(unique_headline, image_url, category, api_key)
     
     if article_body and post_to_blogger(service, unique_headline, article_body):
-        # DOUBLE CHECK: Re-read posted list right before writing to avoid race conditions
-        fresh_posted_titles = []
+        # DOUBLE CHECK before recording
+        fresh_titles = []
         if os.path.exists(POSTED_NEWS_FILE):
             with open(POSTED_NEWS_FILE, "r", encoding="utf-8") as f:
-                fresh_posted_titles = f.read().splitlines()
+                fresh_titles = f.read().splitlines()
         
-        if news_to_post.title not in fresh_posted_titles:
+        if news_to_post.title not in fresh_titles:
             with open(POSTED_NEWS_FILE, "a", encoding="utf-8") as f:
                 f.write(news_to_post.title + "\n")
-            print(f"SUCCESS: Posted {category} news: {unique_headline}")
-        else:
-            print("DEBUG: Conflict detected! This news was posted by another run just now. Skipping record.")
+            print(f"SUCCESS: Posted SEO-optimized {category} news: {unique_headline}")
 
 if __name__ == "__main__":
     main()
